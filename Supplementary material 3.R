@@ -1,3 +1,9 @@
+nuc <- "atggcaaaacaattgcgtgtaactttagatcagaccttaacccagattacaaagagagttgatgaagacaacgacgaaactaatgaaccaatacaaccaaaagaacaagaaaatattcaaagagaaataaattgcatccaagtggaatcattcaatgatacaacggtgaaatgtgaatttcaaagccaatttagacagttaatcacatatccagtgcatatattctacatacacaataatacatcatttacccaagtcgaggcaatcattcaagaaattaacgatagccacgtccacattttaattatttgcattgatacaaatttattcagtaaacatttagctggaattttaaatacacaatcgttgctgatatttgcatttaaaccagtttggatcggtaaagcatttgattttctacttgattcaggagttttaatagaaccagtaacacatgaacagataaattttgacgagataattgaaggtatagaagcacggaaacaaaatgactctattgatgttcataacgtccaagatagtattgtacctatgctacaaagtgggcttgttgtcagtaccatttcgaataatcaagaatttcatcacactacatctatattacgccataacacactcaagaatgctatatcagatatgtcggatgatgttaatattgtcaatgctgtcactaatcgcgatttacgggtacttcttccatcagtcgcttccaacactacagagtctctcagaagtcaagaattaccaaggcattctaagtcgtttcaatgtgacgccagaacagttaaatttgtatcgcaaattcatgacatcagttatagaacaggcagaagaatccaagaacacagactagttgatacaattccagataacgctaacaacgccagctatcacaatattcgatatactgtgttaggtaatgttttactaatggtaccgtatgatgacatgtttcacatgtttgaagagtactcattagatttggcttccgttagtttcgcgttgagtatcaaata"
+n <- 2000
+n_synon <- 2000
+
+# Defining functions -------------------------------------------------------------------------------------
+
 # This function returns the reverse sequence
 strReverse <- function(x) sapply(lapply(strsplit(x, NULL), rev), paste, collapse="")
 
@@ -143,7 +149,7 @@ synonymous_mutation_bootstrap <- function(nuc,n=1000,seed=NULL){
   revcom.b.distrib2 <- list(NULL)
   
   # Table of codons
-  codon_table <- readRDS("codon_table.rds"),silent=TRUE) 
+  codon_table <- readRDS("codon_table.rds") 
   
   for (i in 1:n) {
     # randomly generates a nucleotide sequence that encodes the same codon sequnce in frame 0
@@ -203,3 +209,68 @@ synonymous_mutation_bootstrap <- function(nuc,n=1000,seed=NULL){
   return(returnList)
   
 }
+
+# A function to formats the results
+bootResults <- function(nuc.ORF,permute.distrib,synon.distrib,fs){
+  x <- data.frame(nuc_ORF = nuc.ORF
+                  ,aa_length = round(nchar(nuc.ORF)/3)
+                  ,Pval_permute = 1-permute.distrib(nchar(nuc.ORF)-0.1)^length(nuc.ORF)
+                  ,Pval_synon = 1-synon.distrib(nchar(nuc.ORF)-0.1)^length(nuc.ORF)
+                  ,fs = fs
+  )  
+  
+  nstart <- head(c(1,(cumsum(x$aa_length+1)*3)+1),-1)
+  nend <- c(tail(nstart,-1)-1,sum(x$aa_length+1)*3)
+  
+  
+  if (fs %in% c("plus_1","com_plus_1","rev_plus_1","revcom_plus_1")) {
+    nstart <- nstart + 1
+    nend <- nend + 1
+    nend[length(nend)] <- tail(nend,1)-3
+  }
+  if (fs %in% c("plus_2","com_plus_2","rev_plus_2","revcom_plus_2")) {
+    nstart <- nstart + 2
+    nend <- nend + 2
+    nend[length(nend)] <- tail(nend,1)-3
+  }
+  x$nstart <- nstart
+  x$end <- nend
+  return(x)
+}
+
+
+#Runs the analysis ------------------------------------------------------------
+com.nuc <- complem(nuc)
+rev.nuc <- strReverse(nuc)
+revcom.nuc <- complem(rev.nuc)
+
+ORF0 <- findORF(nuc,0) 
+ORF1 <- findORF(nuc,1)
+ORF2 <- findORF(nuc,2)
+com.ORF0 <- findORF(com.nuc,0)
+com.ORF1 <- findORF(com.nuc,1)
+com.ORF2 <- findORF(com.nuc,2)
+rev.ORF0 <- findORF(rev.nuc,0)
+rev.ORF1 <- findORF(rev.nuc,1)
+rev.ORF2 <- findORF(rev.nuc,2)
+revcom.ORF0 <- findORF(revcom.nuc,0)
+revcom.ORF1 <- findORF(revcom.nuc,1)
+revcom.ORF2 <- findORF(revcom.nuc,2)
+
+distrib.permute <- codon_permute_bootstrap(nuc,n)
+distrib.synon <- synonymous_mutation_bootstrap(nuc,n_synon)
+
+Results <- rbind(
+  bootResults(ORF0,        ecdf(unlist(distrib.permute$b.distrib0)),        ecdf(unlist(distrib.synon$b.distrib0)),  "plus_0")
+  ,bootResults(ORF1,        ecdf(unlist(distrib.permute$b.distrib1)),        ecdf(unlist(distrib.synon$b.distrib1)),  "plus_1")
+  ,bootResults(ORF2,        ecdf(unlist(distrib.permute$b.distrib2)),        ecdf(unlist(distrib.synon$b.distrib2)),  "plus_2")
+  ,bootResults(com.ORF0,    ecdf(unlist(distrib.permute$com.b.distrib0)),    ecdf(unlist(distrib.synon$com.b.distrib0)),  "com_plus_0")
+  ,bootResults(com.ORF1,    ecdf(unlist(distrib.permute$com.b.distrib1)),    ecdf(unlist(distrib.synon$com.b.distrib1)),  "com_plus_1")
+  ,bootResults(com.ORF2,    ecdf(unlist(distrib.permute$com.b.distrib2)),    ecdf(unlist(distrib.synon$com.b.distrib2)),  "com_plus_2")
+  ,bootResults(rev.ORF0,    ecdf(unlist(distrib.permute$rev.b.distrib0)),    ecdf(unlist(distrib.synon$rev.b.distrib0)),  "rev_plus_0")
+  ,bootResults(rev.ORF1,    ecdf(unlist(distrib.permute$rev.b.distrib1)),    ecdf(unlist(distrib.synon$rev.b.distrib1)),  "rev_plus_1")
+  ,bootResults(rev.ORF2,    ecdf(unlist(distrib.permute$rev.b.distrib2)),    ecdf(unlist(distrib.synon$rev.b.distrib2)),  "rev_plus_2")
+  ,bootResults(revcom.ORF0, ecdf(unlist(distrib.permute$revcom.b.distrib0)), ecdf(unlist(distrib.synon$revcom.b.distrib0)),   "revcom_plus_0")
+  ,bootResults(revcom.ORF1, ecdf(unlist(distrib.permute$revcom.b.distrib1)), ecdf(unlist(distrib.synon$revcom.b.distrib1)),   "revcom_plus_1")
+  ,bootResults(revcom.ORF2, ecdf(unlist(distrib.permute$revcom.b.distrib2)), ecdf(unlist(distrib.synon$revcom.b.distrib2)),   "revcom_plus_2")
+)
